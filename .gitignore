@@ -1,3 +1,5 @@
 assignment1/student/*.d
 assignment1/student/*.o
 assignment1/student/*.ppm
+assignment1/student/mandelbrot_set_par
+assignment1/student/mandelbrot_set_seq
