@@ -11,7 +11,7 @@
 int main(int argc, char **argv)
 {
 	struct timespec begin, end;
-	int num_threads = 1;
+	int num_threads = 4;
 	int max_iter = 1000; // sizeof(colors);
 	int x_resolution = 1000;
 	int y_resolution = 1000;
@@ -94,9 +94,9 @@ error: printf(
 	       "Stepsize x = %lf y = %lf\n", num_threads, max_iter, x_resolution,
 	       y_resolution, view_x0, view_x1, view_y0, view_y1, x_stepsize,
 	       y_stepsize);
-	
+
 	if (!no_output)
-		printf("Output file: %s\n", file_name); 
+		printf("Output file: %s\n", file_name);
 	else
 		printf("No output will be writen\n");
 
@@ -118,10 +118,12 @@ error: printf(
 		exit(EXIT_FAILURE);
 	}
 
-	// compute mandelbrot	
+	// compute mandelbrot
 	clock_gettime(CLOCK_MONOTONIC, &begin);
 	mandelbrot_draw(x_resolution, y_resolution, max_iter, view_x0, view_x1, view_y0, view_y1, x_stepsize, y_stepsize, palette_shift, image, num_threads);
 	clock_gettime(CLOCK_MONOTONIC, &end);
+
+	printf("%s haaa \n", image[300][300]);
 
 	if (!no_output) {
 		if (fprintf(file, "P6\n%d %d %d\n", x_resolution, y_resolution, 255) < 0)
