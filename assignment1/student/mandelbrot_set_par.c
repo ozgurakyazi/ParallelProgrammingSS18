@@ -36,7 +36,9 @@ void* traverse(void* args){
 	struct man_args* arg= (struct man_args*) args;
 	double y;
 	double x;
-  unsigned char (*img)[arg->x_resolution][3] = (unsigned char (*)[arg->x_resolution][3])(arg->img);
+
+	unsigned char (*img)[arg->x_resolution][3] = (unsigned char (*)[arg->x_resolution][3])(arg->img);
+
 	complex double Z;
 	complex double C;
 
@@ -59,11 +61,13 @@ void* traverse(void* args){
 
 			if (k == arg->max_iter){
 				memcpy(img[i][j], "\0\0\0", 3);
+				//printf("%s haaa \n", img[i][j]);
 			}
 			else{
 				int index = (k + arg->palette_shift)
 				            % (sizeof(colors) / sizeof(colors[0]));
 				memcpy(img[i][j], colors[index], 3);
+				//printf("%s i:%d , j:%d \n", img[i][j],i,j);
 			}
 		}
 	}
@@ -80,11 +84,16 @@ void mandelbrot_draw(int x_resolution, int y_resolution, int max_iter,
 		struct man_args* args = (struct man_args*) malloc(num_threads * sizeof(struct man_args) );
 
 		int section_size = y_resolution / num_threads;
+		//int resid = (y_resolution % num_threads != 0) ? 1 : 0;
 
 		for(int i=0; i < num_threads ; i++){
 				args[i].x_resolution = x_resolution;
 				args[i].y_start = i*section_size;
-				args[i].y_end = MIN((i+1)*section_size,y_resolution);
+				args[i].y_end = num_threads!=i+1 ? ((i+1)*section_size)  : y_resolution;
+				// printf("###############################\n" );
+				// printf("%d\n",args[i].y_start );
+				// printf("%d\n",args[i].y_end );
+				// printf("###############################\n" );
 				args[i].max_iter = max_iter;
 				args[i].view_x0 = view_x0;
 				args[i].view_x1 = view_x1;
