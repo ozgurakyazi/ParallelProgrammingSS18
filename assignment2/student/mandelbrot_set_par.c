@@ -6,8 +6,13 @@
 #include <pthread.h>
 
 #include "mandelbrot_set.h"
+#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
+
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
 struct man_args
 {
+	int y_resolution;
 	int x_resolution;
 	int y_start;
 	int y_end;
@@ -20,6 +25,7 @@ struct man_args
 	double y_stepsize;
 	int palette_shift;
 	void* img;//[x_resolution][3];
+	int* y_counter; // pointer to the shared variable
 };
 
 /*
@@ -39,31 +45,49 @@ void* traverse(void* args){
 	complex double C;
 
 	int k;
+	while(arg->y_start != arg->y_resolution){
 
-	for (int i = arg->y_start; i < arg->y_end; i++){
-		for (int j = 0; j < arg->x_resolution; j++){
-			y = arg->view_y1 - i * arg->y_stepsize;
-			x = arg->view_x0 + j * arg->x_stepsize;
+		//critical section
+		pthread_mutex_lock(&mutex);
+		int temp = (*(arg->y_counter));
+		arg->y_start = temp;
+		// if(temp+5 <= arg->y_resolution){
+		// 	temp +=5;
+		// }
+		// else{
+		// 	temp = arg->y_resolution;
+		// }
+		temp = MIN(temp+5, arg->y_resolution);
+		arg->y_end = temp;
+		(*(arg->y_counter)) = temp;
+		pthread_mutex_unlock(&mutex);
+		//critical section end
 
-			Z = 0 + 0 * I;
-			C = x + y * I;
+		for (int i = arg->y_start; i < arg->y_end; i++){
+			for (int j = 0; j < arg->x_resolution; j++){
+				y = arg->view_y1 - i * arg->y_stepsize;
+				x = arg->view_x0 + j * arg->x_stepsize;
 
-			k = 0;
+				Z = 0 + 0 * I;
+				C = x + y * I;
 
-			do{
-				Z = Z * Z + C;
-				k++;
-			} while (cabs(Z) < 2 && k < arg->max_iter);
+				k = 0;
 
-			if (k == arg->max_iter){
-				memcpy(img[i][j], "\0\0\0", 3);
-				//printf("%s haaa \n", img[i][j]);
-			}
-			else{
-				int index = (k + arg->palette_shift)
-				            % (sizeof(colors) / sizeof(colors[0]));
-				memcpy(img[i][j], colors[index], 3);
-				//printf("%s i:%d , j:%d \n", img[i][j],i,j);
+				do{
+					Z = Z * Z + C;
+					k++;
+				} while (cabs(Z) < 2 && k < arg->max_iter);
+
+				if (k == arg->max_iter){
+					memcpy(img[i][j], "\0\0\0", 3);
+					//printf("%s haaa \n", img[i][j]);
+				}
+				else{
+					int index = (k + arg->palette_shift)
+					            % (sizeof(colors) / sizeof(colors[0]));
+					memcpy(img[i][j], colors[index], 3);
+					//printf("%s i:%d , j:%d \n", img[i][j],i,j);
+				}
 			}
 		}
 	}
@@ -75,6 +99,7 @@ void mandelbrot_draw(int x_resolution, int y_resolution, int max_iter,
 	                int palette_shift, unsigned char (*image)[x_resolution][3],
 						 int num_threads) {
 
+		int y_counter=0;
 		pthread_t *threads = (pthread_t*) malloc(num_threads * sizeof(pthread_t));
 
 		struct man_args* args = (struct man_args*) malloc(num_threads * sizeof(struct man_args) );
@@ -84,8 +109,8 @@ void mandelbrot_draw(int x_resolution, int y_resolution, int max_iter,
 
 		for(int i=0; i < num_threads ; i++){
 				args[i].x_resolution = x_resolution;
-				args[i].y_start = i*section_size;
-				args[i].y_end = num_threads!=i+1 ? ((i+1)*section_size)  : y_resolution;
+				args[i].y_resolution = y_resolution;
+				args[i].y_start = 0;
 				// printf("###############################\n" );
 				// printf("%d\n",args[i].y_start );
 				// printf("%d\n",args[i].y_end );
@@ -99,6 +124,7 @@ void mandelbrot_draw(int x_resolution, int y_resolution, int max_iter,
 				args[i].y_stepsize = y_stepsize;
 				args[i].palette_shift = palette_shift;
 				args[i].img = image;
+				args[i].y_counter = &y_counter;
 				pthread_create(&threads[i], NULL, traverse, args+i);
 		}
 

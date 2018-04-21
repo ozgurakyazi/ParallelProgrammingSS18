@@ -2,3 +2,7 @@ assignment1/student/*.d
 assignment1/student/*.o
 assignment1/student/mandelbrot_set_par
 assignment1/student/mandelbrot_set_seq
+assignment2/student/*.d
+assignment2/student/*.o
+assignment2/student/mandelbrot_set_par
+assignment2/student/mandelbrot_set_seq
