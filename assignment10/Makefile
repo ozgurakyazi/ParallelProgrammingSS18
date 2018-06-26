@@ -27,7 +27,7 @@ OBJ_UNIT = $(SDIR)/unit_test.o $(SDIR)/$(NAME).o $(SDIR)/$(NAME)_ref.o $(SDIR)/$
 # The dependency file names.
 DEPS := $(OBJ_SEQ:.o=.d)
 
-all: sequential parallel unit_test
+all: clean sequential parallel unit_test
 
 sequential: $(SDIR)/$(NAME)_seq
 
@@ -45,7 +45,7 @@ $(SDIR)/$(NAME)_par : $(OBJ_PAR)
 	$(CC) -o $@ $(OBJ_PAR) $(CFLAGS) $(LDFLAGS)
 
 $(SDIR)/unit_test: $(OBJ_UNIT)
-	$(CC) -o $@ $(OBJ_UNIT) $(CFLAGS) $(LDFLAGS) 
+	$(CC) -o $@ $(OBJ_UNIT) $(CFLAGS) $(LDFLAGS)
 
 $(SDIR)/%.d: %.c
 	@set -e; rm -f $@; \
@@ -57,11 +57,8 @@ $(SDIR)/%.o: %.c
 	$(CC) -c -MMD -MP $< -o $@ $(CFLAGS) $(LDFLAGS)
 
 clean:
-	rm -f $(SDIR)/$(NAME)_par $(SDIR)/$(NAME)_seq $(SDIR)/unit_test $(SDIR)/*.o $(SDIR)/*.d
-	
+	rm -f $(SDIR)/$(NAME)_par $(SDIR)/$(NAME)_seq $(SDIR)/unit_test $(SDIR)/*.o $(SDIR)/*.d $(SDIR)/../*.svg
+
 -include $(DEPS)
 
 .PHONY : all sequential parallel unit_test clean performance_test
-
-
-

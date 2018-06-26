@@ -66,6 +66,7 @@ int main(int argc, char **argv)
 
   if(rank==0)
       if ( (heat-heat_ref) >0.00001){
+        printf("this is wrong\n");
           MPI_Abort(comm,1);
       }
 
