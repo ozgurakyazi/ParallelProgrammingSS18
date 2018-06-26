@@ -133,13 +133,6 @@ double jacobi(double *h_new, double *h_old, int niters, int energy_intensity,
 
     int* boundaries= (int*) malloc(sizeof(int) * 4);
     boundary_binary(boundaries, px, py, rank);
-
-    // to send top, need 1 request, since horizontal array
-    // to send right, need y_per_th requests, each is a number and not horizontal
-    // to send bottom, need 1 request, horizontal array
-    // to send left, need y_per_th requests, each is a number and not horizontal
-
-
     double *tmp;
     int top_req_ind = 0;
     int right_req_ind = top_req_ind + (!boundaries[0])*(1);
@@ -151,11 +144,6 @@ double jacobi(double *h_new, double *h_old, int niters, int energy_intensity,
     for(int iter=0; iter<niters; ++iter){
 
       MPI_Request req[num_requests_per_iter*2];
-      //printf("rank:%d,iter:%d\n", rank,iter);
-      // MPI_Barrier(comm);
-      // if(rank==0){
-      //   printf("iter:%d\n",iter );
-      // }
       if(boundaries[1]!=1){ // if the thread is not in the right boundary then send the last column to the right...
         //int base_send = iter*y_per_th;
         for(int i=2; i<y_per_th-1; i++){
@@ -176,14 +164,13 @@ double jacobi(double *h_new, double *h_old, int niters, int energy_intensity,
       }
       if(boundaries[3]!=1){ // if the thread is not in the left boundary then send the first column to the left...
         for(int i=2; i<y_per_th-1; i++){
-          //printf("!!!rank:%d right_req_ind:%d num_requests_per_iter:%d\n",rank ,right_req_ind,num_requests_per_iter);
           temp_col2[i-1] = h_old[map(1, i ,the_row_count)];
         }
         MPI_Isend(&temp_col2[0], y_per_th-2,MPI_DOUBLE, rank-1,iter,comm,&req[left_req_ind]);
         MPI_Irecv(&temp_col2[y_per_th-2], y_per_th-2,MPI_DOUBLE, rank-1,iter,comm,&req[left_req_ind+num_requests_per_iter]);
       }
 
-      traverse_inner(x_per_th, y_per_th, h_new, h_old ); // first traverse the part where no dependency needed.
+      traverse_inner(x_per_th, y_per_th, h_new, h_old );
 
       if(boundaries[0]!=1){
         MPI_Wait(&req[top_req_ind+num_requests_per_iter],MPI_STATUS_IGNORE);
@@ -215,10 +202,6 @@ double jacobi(double *h_new, double *h_old, int niters, int energy_intensity,
           int rank_i = (sources[i][0]-1) / x_per_th;
           int rank_j = (sources[i][1]-1) / y_per_th;
           if(rank_j*px + rank_i == rank){
-            if(iter==0){
-              printf("rank:%d source:%d, 0:%d, 1:%d\n",rank,i,sources[i][0],sources[i][1] );
-              printf("follow up: i:%d, j:%d\n",((sources[i][0]-1)%x_per_th) + 1,((sources[i][1]-1)%y_per_th) + 1 );
-            }
             h_new[map(((sources[i][0]-1)%x_per_th) + 1, ((sources[i][1]-1)%y_per_th) + 1, x_per_th+2)] += energy_intensity; // heat rate
           }
         }
