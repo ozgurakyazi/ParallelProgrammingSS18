@@ -92,12 +92,20 @@ void traverse_col(int x_per_th, int y_per_th, double* h_new, double* h_old,
   }
 }
 void traverse_col_nonbound(int x_per_th, int y_per_th, double* h_new, double* h_old,
-                  int row_start_ind, int row_count, int col_ind, MPI_Request* req ){ //traverse non boundary columns(not boundary in whole matrix. so this column might be first column of a right matrix.)
+                  int row_start_ind, int row_count, int col_ind,double* temp_col,int left_right ){ //traverse non boundary columns(not boundary in whole matrix. so this column might be first column of a right matrix.)
   int row_end = row_start_ind + row_count;
   int n = x_per_th +2;
-  for(int j=row_start_ind; j<row_end; j++){ // row count
-    MPI_Wait(&req[j-row_start_ind],MPI_STATUS_IGNORE);
-    h_new[map(col_ind, j ,n)] = h_old[map(col_ind, j, n)] / 2.0 + (h_old[map(col_ind - 1, j, n)] + h_old[map(col_ind + 1, j, n)] + h_old[map(col_ind, j - 1, n)] + h_old[map(col_ind, j + 1, n)]) / 8.0;
+  if(left_right == -1){ // left boundary
+    for(int j=row_start_ind; j<row_end; j++){ // row count
+      //MPI_Wait(&req[j-row_start_ind],MPI_STATUS_IGNORE);
+      h_new[map(col_ind, j ,n)] = h_old[map(col_ind, j, n)] / 2.0 + (temp_col[y_per_th-2+j-2] + h_old[map(col_ind + 1, j, n)] + h_old[map(col_ind, j - 1, n)] + h_old[map(col_ind, j + 1, n)]) / 8.0;
+    }
+  }
+  else{ // right boundary
+    for(int j=row_start_ind; j<row_end; j++){ // row count
+      //MPI_Wait(&req[j-row_start_ind],MPI_STATUS_IGNORE);
+      h_new[map(col_ind, j ,n)] = h_old[map(col_ind, j, n)] / 2.0 + (h_old[map(col_ind - 1, j, n)] + temp_col[y_per_th-2+j-2] + h_old[map(col_ind, j - 1, n)] + h_old[map(col_ind, j + 1, n)]) / 8.0;
+    }
   }
 }
 void traverse_row(int x_per_th, int y_per_th, double* h_new, double* h_old,
@@ -120,8 +128,8 @@ double jacobi(double *h_new, double *h_old, int niters, int energy_intensity,
     h_old = (double *)calloc(1, (the_row_count) * (y_per_th + 2) * sizeof(double)); // extended with halos of width 1
     h_new = (double *)calloc(1, (the_row_count) * (y_per_th + 2) * sizeof(double)); // extended with halos of width 1
 
-    //double* temp_col1 = (double *)calloc(1, (y_per_th) * sizeof(double));
-    //double* temp_col2 = (double *)calloc(1, (y_per_th) * sizeof(double));
+    double* temp_col1 = (double *)calloc(1, ((y_per_th-2)*2) * sizeof(double));
+    double* temp_col2 = (double *)calloc(1, ((y_per_th-2)*2) * sizeof(double));
 
     int* boundaries= (int*) malloc(sizeof(int) * 4);
     boundary_binary(boundaries, px, py, rank);
@@ -135,11 +143,11 @@ double jacobi(double *h_new, double *h_old, int niters, int energy_intensity,
     double *tmp;
     int top_req_ind = 0;
     int right_req_ind = top_req_ind + (!boundaries[0])*(1);
-    int bottom_req_ind = right_req_ind + (!boundaries[1])*(y_per_th);
+    int bottom_req_ind = right_req_ind + (!boundaries[1])*(1);
     int left_req_ind = bottom_req_ind + (!boundaries[2])*(1);
 
 
-    const int num_requests_per_iter = (!boundaries[0])*(1)+ (!boundaries[1])*(y_per_th) + (!boundaries[2])*(1) + (!boundaries[3])*(y_per_th);
+    const int num_requests_per_iter = (!boundaries[0])*(1)+ (!boundaries[1])*(1) + (!boundaries[2])*(1) + (!boundaries[3])*(1);
     for(int iter=0; iter<niters; ++iter){
 
       MPI_Request req[num_requests_per_iter*2];
@@ -149,13 +157,13 @@ double jacobi(double *h_new, double *h_old, int niters, int energy_intensity,
       //   printf("iter:%d\n",iter );
       // }
       if(boundaries[1]!=1){ // if the thread is not in the right boundary then send the last column to the right...
-        int base_send = iter*y_per_th;
-        for(int i=1; i<y_per_th+1; i++){
+        //int base_send = iter*y_per_th;
+        for(int i=2; i<y_per_th-1; i++){
           //printf("!!!rank:%d right_req_ind:%d num_requests_per_iter:%d\n",rank ,right_req_ind,num_requests_per_iter);
-          MPI_Isend(&h_old[map(x_per_th, i ,the_row_count)], 1,MPI_DOUBLE, rank+1,base_send+i,comm,&req[i-1+right_req_ind]);
-          MPI_Irecv(&h_old[map(x_per_th+1, i ,the_row_count)], 1,MPI_DOUBLE, rank+1,base_send+i,comm,&req[i-1+right_req_ind+num_requests_per_iter]);
-
+          temp_col1[i-1] = h_old[map(x_per_th, i ,the_row_count)];
         }
+        MPI_Isend(&temp_col1[0], y_per_th-2,MPI_DOUBLE, rank+1,iter,comm,&req[right_req_ind]);
+        MPI_Irecv(&temp_col1[y_per_th-2],y_per_th-2,MPI_DOUBLE, rank+1,iter,comm,&req[right_req_ind+num_requests_per_iter]);
       }
 
       if(boundaries[2] != 1){ // if the thread is not in the bottom boundary then send the last row to the bottom...
@@ -167,11 +175,12 @@ double jacobi(double *h_new, double *h_old, int niters, int energy_intensity,
         MPI_Irecv(&h_old[map(1, 0 ,the_row_count)], x_per_th ,MPI_DOUBLE, rank-px,iter,comm,&req[top_req_ind+num_requests_per_iter]);
       }
       if(boundaries[3]!=1){ // if the thread is not in the left boundary then send the first column to the left...
-        int base_send = iter*y_per_th;
-        for(int i=1; i<y_per_th+1; i++){
-          MPI_Isend(&h_old[map(1, i ,the_row_count)], 1,MPI_DOUBLE, rank-1,base_send+i,comm,&req[i-1+left_req_ind]);
-          MPI_Irecv(&h_old[map(0, i ,the_row_count)], 1,MPI_DOUBLE, rank-1,base_send+i,comm,&req[i-1+left_req_ind+num_requests_per_iter]);
+        for(int i=2; i<y_per_th-1; i++){
+          //printf("!!!rank:%d right_req_ind:%d num_requests_per_iter:%d\n",rank ,right_req_ind,num_requests_per_iter);
+          temp_col2[i-1] = h_old[map(1, i ,the_row_count)];
         }
+        MPI_Isend(&temp_col2[0], y_per_th-2,MPI_DOUBLE, rank-1,iter,comm,&req[left_req_ind]);
+        MPI_Irecv(&temp_col2[y_per_th-2], y_per_th-2,MPI_DOUBLE, rank-1,iter,comm,&req[left_req_ind+num_requests_per_iter]);
       }
 
       traverse_inner(x_per_th, y_per_th, h_new, h_old ); // first traverse the part where no dependency needed.
@@ -187,13 +196,15 @@ double jacobi(double *h_new, double *h_old, int niters, int energy_intensity,
 
 
       if(boundaries[3]!=1){ // if not most left, then it is a nonboundary
-        traverse_col_nonbound(x_per_th,y_per_th, h_new, h_old,1, y_per_th, 1, &req[left_req_ind+num_requests_per_iter] );// traverse first(left) column
+        MPI_Wait(&req[left_req_ind+num_requests_per_iter],MPI_STATUS_IGNORE);
+        traverse_col_nonbound(x_per_th,y_per_th, h_new, h_old,1, y_per_th, 1,temp_col2,-1 );// traverse first(left) column
       }
       else{// if most left, then it is a boundary column
         traverse_col(x_per_th,y_per_th, h_new, h_old,1, y_per_th, 1 );// traverse first(left) column      }
       }
       if(boundaries[1]!=1){ // if not most right, then it is a nonboundary
-        traverse_col_nonbound(x_per_th,y_per_th, h_new, h_old,1, y_per_th, x_per_th, &req[right_req_ind+num_requests_per_iter] );// traverse first(left) column
+        MPI_Wait(&req[right_req_ind+num_requests_per_iter],MPI_STATUS_IGNORE);
+        traverse_col_nonbound(x_per_th,y_per_th, h_new, h_old,1, y_per_th, x_per_th,temp_col1,1 );// traverse first(left) column
       }
       else{
         traverse_col(x_per_th,y_per_th, h_new, h_old,1, y_per_th, x_per_th );// traverse first(left) column
